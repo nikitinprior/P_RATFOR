@@ -1,2 +1,181 @@
 # P_RATFOR
 The source code of the RATFOR preprocessor for SuperSoft fortran  for CP/M has been restored
+
+In rlee peter's cp/m archive /rlee/M/MORROW/BACKUPS/M10/D1/
+the source files of the RATFOR for the SuperSoft fortran compilerfor CP/M preprocessor were discovered.
+However, the original included "FCOMMON.FOR" file was missing from this archive. The absence of this file made it impossible to create an executable file of the RATFOR preprocessor for SuperSoft fortran for CP/M.
+
+Martin made an attempt to write a replacement for this file and described his work:
+
+So after a few hours collecting variable types and dimensions, 
+here is my first version: 
+
+FCOMMON.FOR: 
+==== 8< ===== 
+IMPLICIT INTEGER (A-Z) 
+CHARACTER*1000 SCRAT 
+CHARACTER*1000 GCBUF 
+CHARACTER*1000 FORSTK(10) 
+CHARACTER*1000 DTEXT 
+CHARACTER*1000 DNAMES 
+INTEGER BRKSTK(10) 
+INTEGER FORLEN(10) 
+LOGICAL EOFL 
+COMMON SCRAT,GCBUF,LGCBUF, 
+1 DTEXT,LDTEXT,DNAMES,LDNAMS, 
+1 BRKPTR,BRKSTK, 
+1 FORPTR,FORSTK,FORLEN, 
+1 INFIL,OUTFIL, 
+1 REASHR,LABEL,ERRCNT,EOFL 
+==== 8< ===== 
+
+
+But this was not enough, whatever I tried, the resulting 
+executable failed with a lot of errors. 
+
+And hera began the funny part, placing WRITEs into the code 
+and looking whats going on. 
+
+
+I finally spotted the problem, a very silly type conversion problem. 
+In short, the compiler needs to do some form of padding when processing 
+INTERGER*1 types, a byte sized short integer type often used to hold 
+single characters. 
+
+Single quoted one-character constants were padded whith BLANK (32) 
+whereas function results (KHAR!) were padded with NULL (0). 
+
+The explicit conversion function INT1 also is used in some places, 
+it was very confusing at first. 
+
+
+Placing INT1 around every single character constant was enough to fix 
+the code: 
+
+
+$ diff RATFOR0.RAT RATFOR0.RAT 
+178c178 
+< | TOKEN == LEXDO | TOKEN == LEXDIGITS | INT1(TOKEN) == '[[' ) [ 
+--- 
+> | TOKEN == LEXDO | TOKEN == LEXDIGITS | INT1(TOKEN) == INT1('[[') ) [ 
+188,189c188,189 
+< IF ( INT1(TOKEN) == ']' ) 
+< IF ( INT1(LEXTYP(SP)) == '[[' ) 
+--- 
+> IF ( INT1(TOKEN) == INT1(']') ) 
+> IF ( INT1(LEXTYP(SP)) == INT1('[[') ) 
+223c223 
+< IF ( INT1(LEXTYP(SP)) == '[[' ) RETURN 
+--- 
+> IF ( INT1(LEXTYP(SP)) == INT1('[[') ) RETURN 
+282c282 
+< IF (LEX1 == ';' | LEX1 == '[[' | LEX1 == ']' ) BREAK 
+--- 
+> IF (LEX1 == INT1(';') | LEX1 == INT1('[[') | LEX1 == INT1(']') ) BREAK 
+343c343 
+< IF (K1!=' ' & K1!=TAB) BREAK 
+--- 
+> IF (K1!=INT1(' ') & K1!=INT1(TAB)) BREAK 
+747c747 
+< IF (KHAR(GCBUF,1)!='(') 
+--- 
+> IF (KHAR(GCBUF,1)!=INT1('(')) 
+809c809 
+< IF (KHAR(INBUF,1)!='%') BREAK 
+--- 
+> IF (KHAR(INBUF,1)!=INT1('%')) BREAK 
+855c855 
+< 3 IF (KHAR(INBUF,I+1) != '=') 
+--- 
+> 3 IF (KHAR(INBUF,I+1) != INT1('=')) 
+862c862 
+< 4 IF (KHAR(INBUF,I+1) != '=') 
+--- 
+> 4 IF (KHAR(INBUF,I+1) != INT1('=')) 
+869c869 
+< 5 IF (KHAR(INBUF,I+1) != '=') 
+--- 
+> 5 IF (KHAR(INBUF,I+1) != INT1('=')) 
+877c877 
+< IF (KHAR(INBUF,K) == '!') 
+--- 
+> IF (KHAR(INBUF,K) == INT1('!')) 
+879c879 
+< ELSE IF (KHAR(INBUF,I+1) != '=') 
+--- 
+> ELSE IF (KHAR(INBUF,I+1) != INT1('=')) 
+886c886 
+< 7 IF (KHAR(INBUF,I+1) == '&') 
+--- 
+> 7 IF (KHAR(INBUF,I+1) == INT1('&')) 
+892c892 
+< 8 IF (KHAR(INBUF,I+1) == '|') 
+--- 
+> 8 IF (KHAR(INBUF,I+1) == INT1('|')) 
+
+
+These are the commands I used to build the preprocessor. 
+The two step "loader /h" + "sssload" helps to spot 
+the data areas inside the code. 
+
+
+
+A>ratfor 
+SSS/SUPERSOFT RATFOR TRANSLATOR VER. 4.1. 
+
+INPUT FILE? RATFOR.RAT 
+OUTPUT FILE? RATFOR.FOR 
+INCLUDING FILE: RATDEFS.RAT 
+TRANSLATING SUBROUTINE ADDTO(LSCRAT,GCBUF,I) 
+TRANSLATING INTEGER FUNCTION BYFILL(BUF,I) 
+TRANSLATING INTEGER FUNCTION KEYLUK(STR) 
+TRANSLATING CHARACTER*1000 FUNCTION LOOKUP(STRING) 
+TRANSLATING SUBROUTINE PARSE 
+TRANSLATING SUBROUTINE UNSTAK(SP,LEXTYP,LABVAL,TOKEN) 
+TRANSLATING INTEGER FUNCTION LEX(LEXSTR) 
+TRANSLATING SUBROUTINE DEFST 
+TRANSLATING SUBROUTINE INCLST 
+TRANSLATING SUBROUTINE IFCODE(LAB) 
+TRANSLATING SUBROUTINE WHILEC(LAB) 
+TRANSLATING SUBROUTINE WHILES(LAB) 
+TRANSLATING SUBROUTINE OTHERC(LEXSTR) 
+TRANSLATING SUBROUTINE REPCOD(LAB) 
+TRANSLATING SUBROUTINE UNTILS(LAB,UN) 
+TRANSLATING SUBROUTINE FORCOD(LAB) 
+TRANSLATING CHARACTER*80 FUNCTION CLAUSE(STRING) 
+TRANSLATING SUBROUTINE FORS(LAB) 
+TRANSLATING SUBROUTINE DOCODE(LAB) 
+TRANSLATING SUBROUTINE PUSH(LAB) 
+TRANSLATING SUBROUTINE DOSTAT(LAB) 
+TRANSLATING SUBROUTINE EXIT(CODE) 
+TRANSLATING INTEGER FUNCTION LABGEN(EXTRA) 
+TRANSLATING SUBROUTINE EATUP(LSCRAT) 
+TRANSLATING SUBROUTINE BALPAR(LSCRAT,DOSPLT) 
+TRANSLATING SUBROUTINE ERROR(IAR) 
+TRANSLATING SUBROUTINE READCD(BUF) 
+
+A>for ratfor ;d 
+COPYRIGHT (C) 1983 SMALL SYSTEMS SERVICES INC. 
+
+A>loader ratfor/h/l,mlib 
+SSS/SUPERSOFT LINKING LOADER VER 3.2 
+COPYRIGHT 1983 SMALL SYSTEMS SERVICES INC 
+
+
+
+A>sssload ratfor 
+
+Except for the new included file "FCOMMON.FOR"  for compilation, Martin had to slightly change the source file of the preprocessor itself. After that, the compilation began to run successfully.
+
+This repository contains
+
+FCOMMON.FOR - new included file
+
+RATFOR.RAT - corrected version of the source file
+
+RATDEFS.RAT - file with RATFOR definitions
+
+To compile, you need to run several commands
+described by Martin.
+
+Andrey
